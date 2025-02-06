@@ -8,16 +8,20 @@ import random
 from datetime import timedelta
 from airflow.hooks.postgres_hook import PostgresHook
 from airflow.models import Param
-from weather_modules.utils import fetch_weather_data_from_db
+import sys
+import os
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'utils')))
+from utils import fetch_weather_data_from_db
 from airflow.models import Variable
 from dotenv import load_dotenv
-import os
+
 from weather_modules.fetch_data import fetch_weather_data
 from weather_modules.insert_data import insert_weather_data
 
 
 POSTGRES_CONNECTION_ID = Variable.get("postgres_conn_id")
-
+CSV_FILE_PATH=Variable.get('csv_file_path')
+DATA_TABLE_NAME=Variable.get('data_table_name')
 
 with DAG(
     'weather_data_flow',
@@ -47,7 +51,7 @@ with DAG(
         postgres_conn_id=POSTGRES_CONNECTION_ID,
         sql="""
         CREATE TABLE IF NOT EXISTS weather_data (
-            datetime DATE ,
+            datetime DATE PRIMARY KEY,
             temperature FLOAT,
             humidity INT
         );
@@ -69,7 +73,7 @@ with DAG(
     fetch_from_db_task = PythonOperator(
         task_id='fetch_weather_data_from_db',
         python_callable=fetch_weather_data_from_db,
-        op_args=["SELECT * FROM weather_data", '/opt/airflow/dags/tmp/weather_data.csv', POSTGRES_CONNECTION_ID]
+        op_args=[f"SELECT * FROM {DATA_TABLE_NAME}", f'{CSV_FILE_PATH}', POSTGRES_CONNECTION_ID]
     )
 
     fetch_weather_data_task >> create_table_task >> insert_data_task >> fetch_from_db_task 
